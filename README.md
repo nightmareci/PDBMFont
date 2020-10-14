@@ -1,10 +1,15 @@
 # PDBMFont
+In exactly one of the compiled source files of your software, you must `#define PDBMFONT_DEFINE` before including PDBMFont.hpp for the definition of the library to be provided. Elsewhere in your software, you just `#include "PDBMFont.hpp"`, without the definition macro being defined before those inclusion locations, to get a declaration of the BMFont class.
+
 When using the library for reading and/or writing, one or more of the following constants have to be defined before including PDBMFont.hpp:
 * `PDBMFONT_TEXT`
 * `PDBMFONT_BINARY`
 * `PDBMFONT_XML`
+Be sure that you define the same format constants before every inclusion of PDBMFont.hpp in your software.
 
-You can also include the library with no read and write support for all formats, but you'll only be able to use the BMFont struct however you wish.
+You can also include the library with no read and write support for all formats, but you'll only be able to use the BMFont class however you wish. You could do that to subclass PDBMFont::BMFont with support for some other format(s) while keeping the same API.
+
+The library doesn't do anything with the image files that fonts reference, so you'll have to handle those in your own code.
 
 Basic use of the library, with the automatic format handling functions:
 ```cpp
@@ -22,7 +27,7 @@ drawText(font, "Example Text");
 font.write("NewFont.fnt");
 ```
 
-A test program that demonstrates use of the library with SDL2, with correct typesetting, is provided, and is also available in the public domain or under the MIT license. You will have to provide your own bitmap font to use the test program.
+A test program that demonstrates use of the library with SDL2, with correct typesetting, is provided, and is also available under the terms of the Unlicense. You will have to provide your own bitmap font to use the test program.
 
 XML support requires tinyxml2, but if you don't need XML support for some reason (you won't use it, or don't want to be restricted by tinyxml2's license) XML support can be disabled.
 

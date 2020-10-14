@@ -1,36 +1,31 @@
+#if !defined(PDBMFONT_INCLUDE) || defined(PDBMFONT_DEFINE)
+#define PDBMFONT_INCLUDE
 /**
- * This library is available as public domain; its author disclaims any
- * copyright to it, if you choose to license as public domain.
- *
- * You may credit the author, Brandon McGriff, when licensing as public domain.
- *
- * You may also license this library under the MIT license; this is intended as
- * an option for countries that have no laws for explicit submission to the
- * public domain:
- *
- * The MIT License (MIT)
- *
- * Copyright (c) 2020 Brandon McGriff
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to
- * deal in the Software without restriction, including without limitation the
- * rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- * IN THE SOFTWARE.
+ * This is free and unencumbered software released into the public domain.
+ * 
+ * Anyone is free to copy, modify, publish, use, compile, sell, or
+ * distribute this software, either in source code form or as a compiled
+ * binary, for any purpose, commercial or non-commercial, and by any
+ * means.
+ * 
+ * In jurisdictions that recognize copyright laws, the author or authors
+ * of this software dedicate any and all copyright interest in the
+ * software to the public domain. We make this dedication for the benefit
+ * of the public at large and to the detriment of our heirs and
+ * successors. We intend this dedication to be an overt act of
+ * relinquishment in perpetuity of all present and future rights to this
+ * software under copyright law.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ * 
+ * For more information, please refer to <http://unlicense.org/>
  */
-#pragma once
 
 #include <string>
 #include <vector>
@@ -61,20 +56,39 @@
 #endif
 
 namespace PDBMFont {
+#ifdef PDBMFONT_DEFINE
 	// This class doesn't close the FILE* passed into the constructor when
 	// destructed, so it's your responsibility to close the FILE* when done using
 	// this class. It's also your responsibility to open the FILE* with the right
 	// openmode, and matching that openmode to the mode used to construct this
 	// class, so that reading and/or writing will work.
 	class CFileStreambuf : public std::streambuf {
-	private:
-		FILE* file;
-		char_type ch;
-		const std::ios_base::openmode mode;
+	public:
+		CFileStreambuf() = delete;
+
+		CFileStreambuf(FILE* const file, const std::ios_base::openmode mode) : file(file), ch(0), mode(mode) {
+			setg(nullptr, nullptr, nullptr);
+			setp(nullptr, nullptr);
+		}
 
 	protected:
 		pos_type seekoff(off_type off, std::ios_base::seekdir dir, std::ios_base::openmode which = std::ios_base::in | std::ios_base::out) {
-			int success = fseek(file, static_cast<long>(off), SEEK_CUR);
+			int whence;
+			switch (dir) {
+			case std::ios_base::beg:
+				whence = SEEK_SET;
+				break;
+			case std::ios_base::cur:
+				whence = SEEK_CUR;
+				break;
+			case std::ios_base::end:
+				whence = SEEK_END;
+				break;
+			default:
+				whence = SEEK_SET;
+				break;
+			}
+			int success = fseek(file, static_cast<long>(off), whence);
 			if (success == 0) {
 				return off;
 			}
@@ -116,16 +130,15 @@ namespace PDBMFont {
 		}
 
 		std::streamsize xsgetn(char_type* s, std::streamsize count) {
-			if (mode & std::ios_base::in) {
-				size_t readcount = fread(s, sizeof(char_type), count, file);
+			std::streamsize readcount = 0u;
+			if ((mode & std::ios_base::in) && (readcount = fread(s, sizeof(char_type), count, file)) > 0u) {
 				ch = s[readcount - 1u];
 				setg(&ch, &ch, &ch + 1u);
-				return readcount;
 			}
 			else {
 				setg(nullptr, nullptr, nullptr);
-				return 0u;
 			}
+			return readcount;
 		}
 
 		int_type overflow(int_type outch = traits_type::eof()) {
@@ -135,9 +148,9 @@ namespace PDBMFont {
 			}
 
 			ch = outch;
-			size_t count = fwrite(&ch, sizeof(char_type), 1u, file);
+			size_t writecount = fwrite(&ch, sizeof(char_type), 1u, file);
 
-			if (count > 0u && !feof(file)) {
+			if (writecount > 0u && !feof(file)) {
 				setp(&ch, &ch);
 				return ~traits_type::eof();
 			}
@@ -148,30 +161,27 @@ namespace PDBMFont {
 		}
 
 		std::streamsize xsputn(const char_type* s, std::streamsize count) {
-			if (mode & std::ios_base::out) {
-				size_t writecount = fwrite(s, sizeof(char_type), count, file);
+			std::streamsize writecount = traits_type::eof();
+			if ((mode & std::ios_base::out) && (writecount = fwrite(s, sizeof(char_type), count, file)) > 0u) {
 				ch = s[writecount - 1u];
 				setp(&ch, &ch);
-				return writecount;
 			}
 			else {
 				setp(nullptr, nullptr);
-				return traits_type::eof();
 			}
+			return writecount;
 		}
 
 		// pbackfail can't be implemented with FILE* easily, because the stdio
 		// functions don't support everything required to easily implement
 		// pbackfail. So it's not implemented for this class.
 
-	public:
-		CFileStreambuf() = delete;
-
-		CFileStreambuf(FILE* file, std::ios_base::openmode mode) : file(file), ch(0), mode(mode) {
-			setg(nullptr, nullptr, nullptr);
-			setp(nullptr, nullptr);
-		}
+	private:
+		FILE* const file;
+		char_type ch;
+		const std::ios_base::openmode mode;
 	};
+#endif
 
 	// When reading and writing the text format, size_t or signed int fields
 	// are supported for numeric fields, except for 32-bit character IDs. The
@@ -208,20 +218,12 @@ namespace PDBMFont {
 	// isn't correctly written XML, of course; that extra data will also not be
 	// written when a write function is called.
 
-	struct BMFont {
+#ifndef PDBMFONT_DECLARE
+#define PDBMFONT_DECLARE
+	class BMFont {
+	public:
 		struct KerningHasher {
-			std::size_t operator()(const std::pair<std::uint32_t, std::uint32_t>& p) const noexcept {
-				if (sizeof(std::size_t) >= sizeof(std::uint32_t) * 2u) {
-					// Guarantees no hash collisions on 64-bit or higher systems.
-					// As of the time this library was last updated, Unicode's
-					// range isn't even close to the full range of uint32_t.
-					return (static_cast<std::size_t>(p.first) << 32u) | p.second;
-				}
-				else {
-					// Should work fine on 32-bit systems.
-					return (static_cast<std::size_t>(p.first) << 11u) ^ p.second;
-				}
-			}
+			std::size_t operator()(const std::pair<std::uint32_t, std::uint32_t>& p) const noexcept;
 		};
 
 		struct Char {
@@ -320,34 +322,34 @@ namespace PDBMFont {
 		// supported file types succeeded. The file must be seekable for format
 		// detection to work.
 		bool read(std::istream& stream);
-		bool read(FILE* file);
-		bool read(const std::string filename);
+		bool read(FILE* const file);
+		bool read(const std::string& filename);
 		// These functions write in the file type set by the last read function
 		// call. All read functions set the appropriate file type, even the
 		// format-specific functions (such as readText setting format to
 		// Format::text). No writing is performed if the format isn't set to a
 		// format that was compiled in, and in that case false is returned.
 		bool write(std::ostream& stream);
-		bool write(FILE* file);
+		bool write(FILE* const file);
 		bool write(const std::string filename);
 #endif
 
 #ifdef PDBMFONT_TEXT
 		bool readText(std::istream& stream);
-		bool readText(FILE* file);
+		bool readText(FILE* const file);
 		bool readText(const std::string filename);
 		bool writeText(std::ostream& stream);
-		bool writeText(FILE* file);
+		bool writeText(FILE* const file);
 		bool writeText(const std::string filename);
 #endif
 
 #ifdef PDBMFONT_XML
 		bool convertFromXMLDocument(tinyxml2::XMLDocument& document, tinyxml2::XMLError error);
 		bool readXML(std::istream& stream);
-		bool readXML(FILE* file);
+		bool readXML(FILE* const file);
 		bool readXML(const std::string filename);
 		void convertToXMLDocument(tinyxml2::XMLDocument& document);
-		bool writeXML(FILE* file);
+		bool writeXML(FILE* const file);
 		bool writeXML(std::ostream& stream);
 		bool writeXML(const std::string filename);
 #endif
@@ -358,32 +360,34 @@ namespace PDBMFont {
 		// unexpectedly; reading almost certainly will fail on Windows, if the
 		// binary flag isn't set.
 		bool readBinary(std::istream& stream);
-		bool readBinary(FILE* file);
+		bool readBinary(FILE* const file);
 		bool readBinary(const std::string filename);
 		// When using an ofstream or FILE* with writeBinary, be sure it was
 		// created with the binary open mode flag set, or writing may write out
 		// incorrect data on Windows, or possibly other platforms.
 		bool writeBinary(std::ostream& stream);
-		bool writeBinary(FILE* file);
+		bool writeBinary(FILE* const file);
 		bool writeBinary(const std::string filename);
+#endif
 
-		inline std::uint8_t toByte(const char data) {
+	private:
+		static std::uint8_t toByte(const char data) {
 			return static_cast<std::uint8_t>(data);
 		}
 
-		inline std::int16_t toInt(const char* data) {
+		static std::int16_t toInt(const char* data) {
 			return
 				((static_cast<std::int16_t>(data[0]) << 0) & INT16_C(0x00FF)) |
 				((static_cast<std::int16_t>(data[1]) << 8) & INT16_C(0xFF00));
 		}
 
-		inline std::uint16_t toUint(const char* data) {
+		static std::uint16_t toUint(const char* data) {
 			return
 				((static_cast<std::uint16_t>(data[0]) << 0) & UINT16_C(0x00FF)) |
 				((static_cast<std::uint16_t>(data[1]) << 8) & UINT16_C(0xFF00));
 		}
 
-		inline std::uint32_t toSize(const char* data) {
+		static std::uint32_t toSize(const char* data) {
 			std::uint32_t size = UINT32_C(0);
 
 			for (std::uint32_t i = UINT32_C(0); i < sizeof(std::uint32_t); i++) {
@@ -393,7 +397,7 @@ namespace PDBMFont {
 		}
 
 		template<typename T>
-		inline char* toBinField(const T data, char* out) {
+		static char* toBinField(const T data, char* out) {
 			for (T i = T(0); i < sizeof(T); i++) {
 				out[i] = (data >> (i * T(8))) & T(0xFF);
 			}
@@ -401,29 +405,46 @@ namespace PDBMFont {
 		}
 
 		template<typename T>
-		inline void writeBinField(const T data, std::ostream& stream) {
+		static void writeBinField(const T data, std::ostream& stream) {
 			char outData[sizeof(T)];
 			stream.write(toBinField(data, outData), sizeof(T));
 		}
-#endif
-	};
 
 #if defined(PDBMFONT_TEXT) || defined(PDBMFONT_BINARY) || defined(PDBMFONT_XML)
-	const static std::pair<bool (BMFont::*)(std::istream&), BMFont::Format> readFunctions[] = {
+		static constexpr bool (BMFont::* const readFunctions[])(std::istream&)
+		= {
 #ifdef PDBMFONT_TEXT
-		{ &BMFont::readText, BMFont::Format::text },
+			&BMFont::readText,
 #endif
 #ifdef PDBMFONT_BINARY
-		{ &BMFont::readBinary, BMFont::Format::binary },
+			&BMFont::readBinary,
 #endif
 #ifdef PDBMFONT_XML
-		{ &BMFont::readXML, BMFont::Format::xml }
+			&BMFont::readXML
+#endif
+		};
 #endif
 	};
+#endif
 
+#ifdef PDBMFONT_DEFINE
+	std::size_t BMFont::KerningHasher::operator()(const std::pair<std::uint32_t, std::uint32_t>& p) const noexcept {
+		if (sizeof(std::size_t) >= sizeof(std::uint32_t) * 2u) {
+			// Guarantees no hash collisions on 64-bit or higher systems.
+			// As of the time this library was last updated, Unicode's
+			// range isn't even close to the full range of uint32_t.
+			return (static_cast<std::size_t>(p.first) << 32u) | p.second;
+		}
+		else {
+			// Should work fine on 32-bit systems.
+			return (static_cast<std::size_t>(p.first) << 11u) ^ p.second;
+		}
+	}
+
+#if defined(PDBMFONT_TEXT) || defined(PDBMFONT_BINARY) || defined(PDBMFONT_XML)
 	bool BMFont::read(std::istream& stream){
-		for (auto& readFunction : readFunctions) {
-			if ((this->*readFunction.first)(stream)) {
+		for (const auto& readFunction : readFunctions) {
+			if ((this->*readFunction)(stream)) {
 				return true;
 			}
 			stream.clear();
@@ -432,13 +453,13 @@ namespace PDBMFont {
 		return false;
 	}
 
-	bool BMFont::read(FILE* file){
+	bool BMFont::read(FILE* const file){
 		CFileStreambuf buf(file, std::ios_base::in);
 		std::istream stream(&buf);
 		return read(stream);
 	}
 
-	bool BMFont::read(const std::string filename){
+	bool BMFont::read(const std::string& filename){
 		std::ifstream stream(filename, std::ios_base::binary);
 		return read(stream);
 	}
@@ -466,7 +487,7 @@ namespace PDBMFont {
 		}
 	}
 
-	bool BMFont::write(FILE* file){
+	bool BMFont::write(FILE* const file){
 		CFileStreambuf buf(file, std::ios_base::out);
 		std::ostream stream(&buf);
 		return write(stream);
@@ -1118,7 +1139,7 @@ namespace PDBMFont {
 		return success;
 	}
 
-	bool BMFont::readText(FILE* file) {
+	bool BMFont::readText(FILE* const file) {
 		CFileStreambuf buf(file, std::ios_base::in);
 		std::istream stream(&buf);
 		return readText(stream);
@@ -1206,7 +1227,7 @@ namespace PDBMFont {
 		return true;
 	}
 
-	bool BMFont::writeText(FILE* file) {
+	bool BMFont::writeText(FILE* const file) {
 		CFileStreambuf buf(file, std::ios_base::out);
 		std::ostream stream(&buf);
 		return writeText(stream);
@@ -1430,7 +1451,7 @@ namespace PDBMFont {
 		return true;
 	}
 
-	bool BMFont::readBinary(FILE* file) {
+	bool BMFont::readBinary(FILE* const file) {
 		CFileStreambuf buf(file, std::ios_base::in);
 		std::istream stream(&buf);
 		return readBinary(stream);
@@ -1523,7 +1544,7 @@ namespace PDBMFont {
 		writeBinField(uint16_t(common.scaleW), stream);
 		writeBinField(uint16_t(common.scaleH), stream);
 		writeBinField(uint16_t(pages.size()), stream);
-		stream.put(common.packed << 7);
+		stream.put(uint8_t(common.packed) << 7);
 		stream.put(uint8_t(common.alphaChnl));
 		stream.put(uint8_t(common.redChnl));
 		stream.put(uint8_t(common.greenChnl));
@@ -1542,7 +1563,7 @@ namespace PDBMFont {
 		char* const pagesData = new char[pageDataSize * pages.size()];
 		memset(pagesData, 0, pageDataSize * pages.size());
 		char* pageData = pagesData;
-		for (auto& page : pages) {
+		for (const auto& page : pages) {
 			memcpy(pageData, page.c_str(), page.size() + 1u);
 			pageData += pageDataSize;
 		}
@@ -1553,7 +1574,7 @@ namespace PDBMFont {
 		stream.put('\x04');
 		writeBinField(uint32_t(chars.size() * 20u), stream);
 
-		for (auto& c : chars) {
+		for (const auto& c : chars) {
 			writeBinField(uint32_t(c.first), stream);
 			writeBinField(uint16_t(c.second.x), stream);
 			writeBinField(uint16_t(c.second.y), stream);
@@ -1588,7 +1609,7 @@ namespace PDBMFont {
 		stream.put('\x05');
 		writeBinField(uint32_t(kernings.size() * 10u), stream);
 
-		for (auto& k : kernings) {
+		for (const auto& k : kernings) {
 			writeBinField(k.first.first, stream);
 			writeBinField(k.first.second, stream);
 			writeBinField(int16_t(k.second), stream);
@@ -1597,7 +1618,7 @@ namespace PDBMFont {
 		return true;
 	}
 
-	bool BMFont::writeBinary(FILE* file) {
+	bool BMFont::writeBinary(FILE* const file) {
 		CFileStreambuf buf(file, std::ios_base::out);
 		std::ostream stream(&buf);
 		return writeBinary(stream);
@@ -1817,7 +1838,7 @@ namespace PDBMFont {
 		}
 	}
 
-	bool BMFont::readXML(FILE* file) {
+	bool BMFont::readXML(FILE* const file) {
 		tinyxml2::XMLDocument document;
 		auto error = document.LoadFile(file);
 
@@ -1923,7 +1944,7 @@ namespace PDBMFont {
 		}
 	}
 
-	bool BMFont::writeXML(FILE* file) {
+	bool BMFont::writeXML(FILE* const file) {
 		tinyxml2::XMLDocument document;
 		convertToXMLDocument(document);
 		return document.SaveFile(file) == tinyxml2::XML_SUCCESS;
@@ -1943,4 +1964,6 @@ namespace PDBMFont {
 		return document.SaveFile(filename.c_str()) == tinyxml2::XML_SUCCESS;
 	}
 #endif
+#endif
 }
+#endif
