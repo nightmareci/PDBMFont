@@ -5,6 +5,7 @@ When using the library for reading and/or writing, one or more of the following 
 * `PDBMFONT_TEXT`
 * `PDBMFONT_BINARY`
 * `PDBMFONT_XML`
+
 Be sure that you define the same format constants before every inclusion of PDBMFont.hpp in your software.
 
 You can also include the library with no read and write support for all formats, but you'll only be able to use the BMFont class however you wish. You could do that to subclass PDBMFont::BMFont with support for some other format(s) while keeping the same API.
