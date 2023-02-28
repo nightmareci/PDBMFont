@@ -1415,36 +1415,32 @@ namespace PDBMFont {
 			delete[] charsData;
 		}
 
-		if (!stream.good()) {
-			// Kernings are optional, so return as successful without reading
-			// any when they're not present.
-			kernings.clear();
-			return true;
-		}
-
 		// Block type 5: kerning pairs
-		if (stream.get() != '\x5') {
-			return false;
+		if (stream.good() && stream.get() == '\x5') {
+			char kerningsSizeData[4];
+			stream.read(kerningsSizeData, sizeof(kerningsSizeData));
+			if (!stream.good()) {
+				return false;
+			}
+			const std::uint32_t kerningsSize = toSize(kerningsSizeData);
+			if (kerningsSize % 10u) {
+				return false;
+			}
+			char* const kerningsData = new char[kerningsSize];
+			constexpr std::size_t first = 0u;
+			constexpr std::size_t second = 4u;
+			constexpr std::size_t amount = 8u;
+			stream.read(kerningsData, kerningsSize);
+			if (stream.gcount() != kerningsSize) {
+				return false;
+			}
+			for (char* kerningData = kerningsData; kerningData < kerningsData + kerningsSize; kerningData += 10u) {
+				kernings[{toSize(&kerningData[first]), toSize(&kerningData[second])}] = toInt(&kerningData[amount]);
+			}
 		}
-		char kerningsSizeData[4];
-		stream.read(kerningsSizeData, sizeof(kerningsSizeData));
-		if (!stream.good()) {
-			return false;
-		}
-		const std::uint32_t kerningsSize = toSize(kerningsSizeData);
-		if (kerningsSize % 10u) {
-			return false;
-		}
-		char* const kerningsData = new char[kerningsSize];
-		constexpr std::size_t first = 0u;
-		constexpr std::size_t second = 4u;
-		constexpr std::size_t amount = 8u;
-		stream.read(kerningsData, kerningsSize);
-		if (stream.gcount() != kerningsSize) {
-			return false;
-		}
-		for (char* kerningData = kerningsData; kerningData < kerningsData + kerningsSize; kerningData += 10u) {
-			kernings[{toSize(&kerningData[first]), toSize(&kerningData[second])}] = toInt(&kerningData[amount]);
+		else {
+			// Kernings are optional.
+			kernings.clear();
 		}
 
 		format = Format::binary;

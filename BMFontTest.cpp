@@ -35,7 +35,7 @@
 
 SDL_Window* window = nullptr;
 SDL_Renderer* renderer = nullptr;
-int main() {
+int main(int argc, char** argv) {
 	SDL_Init(SDL_INIT_VIDEO);
 	IMG_Init(IMG_INIT_PNG);
 	atexit([]() {
@@ -52,6 +52,10 @@ int main() {
 
 	if (!(renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED))) {
 		std::cerr << "Failed creating renderer." << std::endl;
+		return EXIT_FAILURE;
+	}
+	if (SDL_RenderSetLogicalSize(renderer, 640, 480) < 0) {
+		std::cerr << "Failed setting renderer logical size." << std::endl;
 		return EXIT_FAILURE;
 	}
 
